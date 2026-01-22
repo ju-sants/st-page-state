@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "st-page-state"
+version = "0.1.1"
+description = "Declarative, typed, URL-synced state management for Streamlit"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "Apache-2.0"
+authors = [
+  {name = "Juan", email = "juan.bisposantos05@gmail.com"},
+]
+dependencies = [
+  "streamlit>=1.30",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+keywords = ["streamlit", "state-management", "url-sync", "declarative"]
+
+[project.urls]
+Homepage = "https://github.com/ju-sants/st-page-state"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/st_page_state"]
