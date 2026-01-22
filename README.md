@@ -150,15 +150,25 @@ class DashboardState(PageState):
         # 1. Add a prefix to all URL keys from this class
         url_prefix = "dash_"
 
-        # 2. If True, remove any URL params not managed by this class
+        # 2. If True (default), remove any URL params not managed by this class
         url_selfish = True
+
+        # 3. If True (default), restore any missing URL params from session state on every change
+        restore_url_on_touch = True
+
+        # 4. List of other PageState classes (by name or Class obj) to share the URL with
+        share_url_with = ["OtherState"] # Or share_url_with = [OtherState]
     
     tab: str = StateVar(default="overview", url_key="tab") # -> ?dash_tab=overview
     show_details: bool = StateVar(default=False, url_key="details") # -> ?dash_details=true
 ```
 
-*   `url_prefix`: Prevents key collisions between different `PageState` models. If you have a `FilterState` and a `SortState` that both use a `by` key, you can prefix them as `?filter_by=name` and `?sort_by=date`.
-*   `url_selfish`: Ideal for "entrypoint" states. When any variable in a selfish state changes, it clears all other query parameters from the URL, ensuring a clean and predictable state.
+*   `url_prefix`: Prevents key collisions between different `PageState` models.
+*   `url_selfish`: **(Default: True)** When any variable in a selfish state changes, it clears all other query parameters from the URL. This ensures a clean URL that only reflects the active component.
+*   `restore_url_on_touch`: **(Default: True)** Guarantees URL completeness. It ensures that whenever you access (read or write) a state variable, its corresponding URL parameter is present. This restores parameters if they were missing due to:
+    1.  Manual removal by the user from the browser URL.
+    2.  Clearing by another `url_selfish` state.
+*   `share_url_with`: **(List[str] | List[Type[PageState]])** A list of other `PageState` class names (strings) or class objects that this state should share the URL with. Even if `url_selfish` is True, parameters belonging to the specified classes will be preserved in the URL instead of being cleared.
 
 *See `examples/07_config_class.py` for a full demo.*
 

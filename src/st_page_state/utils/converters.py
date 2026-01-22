@@ -2,6 +2,7 @@ import datetime
 import json
 import base64
 from typing import Any, Type, get_origin, get_args
+from collections.abc import Hashable
 
 from ..errors import InvalidQueryParamError
 
@@ -16,7 +17,7 @@ def convert_from_URL(key: str, value: str, target_type: Type, value_map: dict = 
         # Value mapping handling.
         # Value map is a way to convert strings to other values before type conversion.
         # e.g.: value_map = {"active": 1, "inactive": 0} will convert "active" to 1 before type conversion.
-        if value_map is not None:
+        if value_map is not None and isinstance(value, Hashable):
 
             # Reversing the map, so we can map from URL value to internal value
             reverse_map = {v: k for k, v in value_map.items()}
@@ -119,7 +120,7 @@ def convert_to_URL(key: str, value: Any, value_map: dict = None) -> str:
         # Value mapping handling.
         # Value map is a way to convert values to other values.
         # e.g.: value_map = {1: "active", 0: "inactive"} will convert 1 to "active".
-        if value_map is not None:
+        if value_map is not None and isinstance(value, Hashable):
             if value in value_map:
                 converted_value = value_map[value]
 

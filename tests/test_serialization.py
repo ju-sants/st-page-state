@@ -61,3 +61,14 @@ class TestURLSerialization:
         decoded = convert_from_URL("test_key", "one", int, value_map)
 
         assert decoded == 1
+
+    def test_value_map_unhashable_value(self):
+        """Test that passing an unhashable value (list) with a value_map doesn't crash."""
+        
+        value_map = {1: "one"}
+        value = [1, 2] # List is unhashable
+        
+        # This check ensures we don't try to look up the entire list in the value_map, which would raise TypeError
+        encoded = convert_to_URL("test_key", value, value_map)
+        
+        assert isinstance(encoded, str)
