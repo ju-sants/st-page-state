@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 # Constant for the session state key used to store page state data
 SESSION_STATE_KEY = "_st_page_state"
 
+# Registry to track all PageState classes
+_PAGE_STATE_REGISTRY = {}
+
 class PageStateMeta(type):
     """
     Metaclass for managing Streamlit session state and URL query parameters.
@@ -71,12 +74,17 @@ class PageStateMeta(type):
         # 2. Avoid processing the base class itself
         if name == "PageState": return
         
+        # Register the class
+        _PAGE_STATE_REGISTRY[name] = cls
+        
         # ---
         # 3. Config class Processing
         default_config = {
-            "url_selfish": False,
+            "url_selfish": True,
             "url_prefix": "",
             "ignore_none_url": True,
+            "restore_url_on_touch": True,
+            "share_url_with": [],
         }
         
         # Get user config or use defaults
@@ -146,9 +154,14 @@ class PageStateMeta(type):
 
             # If the attribute is already in session state, return it
             if key in class_ns:
+                
+                # 3. "Restore URL on touch" feature
+                if cls._config.get("restore_url_on_touch"):
+                    cls._restore_url()
+                    
                 return class_ns[key]
             
-            # 3. Else not in session state, we'll lazy initialize it (retrieve from URL or default value)
+            # 4. Else not in session state, we'll lazy initialize it (retrieve from URL or default value)
             return cls._initialize_attribute(key)
         
         # If the attribute are not in the memory of the class and not in session state, raise a AttributeError
@@ -187,6 +200,11 @@ class PageStateMeta(type):
             # ---
             # 3. Url Syncing
             cls._sync_url(key, value)
+
+            # ---
+            # 4. "Restore URL on touch" feature
+            if cls._config.get("restore_url_on_touch"):
+                cls._restore_url()
 
             # ---
             # Hook: If the child class has "on_change" method, calls it
@@ -265,6 +283,55 @@ class PageStateMeta(type):
         
         # Return the initialized value
         return value_to_set
+
+    def _restore_url(cls):
+        """
+        Ensures that all URL query parameters defined in the class are present in the URL,
+        restoring them from the session state if they are missing.
+
+        This is useful when `restore_url_on_touch` is True (default). It triggers on any
+        access (read or write) to ensure URL parameters are present, preventing the URL
+        from getting out of sync if:
+        1. A parameter is manually removed by the user from the browser URL.
+        2. A parameter is cleared by another `url_selfish` state (which is also True by default).
+        """
+        
+        # Prevent recursion
+        if getattr(cls, "_is_restoring_url", False):
+            return
+
+        # Mark that we are restoring URL to avoid recursion
+        cls._is_restoring_url = True
+        
+        try:
+            prefix = cls._config.get("url_prefix", "")
+
+            # Iterate over all defined state variables
+            for field, metadata in cls._model_metadata.items():
+                
+                url_key = metadata.get("url_key")
+                if not url_key:
+                    continue
+                    
+                value = getattr(cls, field)
+                value_map = metadata.get("value_map")
+
+                # Handle None values
+                if value is None:
+                    if cls._config.get("ignore_none_url"):
+                        continue
+                    else:
+                        value = ""
+
+                # Restore the URL parameter only if it's missing
+                final_url_key = f"{prefix}{url_key}"
+                if final_url_key not in st.query_params:
+                    url_value = convert_to_URL(field, value, value_map)
+                    st.query_params[final_url_key] = url_value
+        
+        finally:
+            # Unmark the restoring flag
+            cls._is_restoring_url = False
     
     def _sync_url(cls, key: str, value: Any):
         """
@@ -293,8 +360,35 @@ class PageStateMeta(type):
                 f"{prefix}{m['url_key']}"
                 for m in cls._model_metadata.values() if m.get("url_key")
             }
+            
+            # Add allowed keys from shared classes
+            shared_classes = cls._config.get("share_url_with", [])
+            for shared_item in shared_classes:
+                shared_cls = None
+                
+                # Resolve shared classitem (could be class or string name)
+                if isinstance(shared_item, type):
+                    shared_cls = shared_item
+                elif isinstance(shared_item, str):
+                    shared_cls = _PAGE_STATE_REGISTRY.get(shared_item)
 
-            # Keep only keys belonging to this class
+                # If found, add its allowed keys
+                if shared_cls and hasattr(shared_cls, '_model_metadata'):
+
+                    # Apply shared class prefix
+                    shared_prefix = getattr(shared_cls, '_config', {}).get("url_prefix", "")
+                    
+                    # Collect shared class keys
+                    shared_keys = {
+                        f"{shared_prefix}{m['url_key']}"
+                        for m in shared_cls._model_metadata.values() if m.get("url_key")
+                    }
+
+                    # Update allowed keys
+                    allowed_keys.update(shared_keys)
+
+            # ---
+            # Keep only keys belonging to this class OR shared classes
             for k in list(st.query_params.keys()):
 
                 if k not in allowed_keys:
