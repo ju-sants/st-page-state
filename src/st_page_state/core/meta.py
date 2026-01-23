@@ -284,6 +284,84 @@ class PageStateMeta(type):
         # Return the initialized value
         return value_to_set
 
+    def _sync_url(cls, key: str, value: Any):
+        """
+        Synchronizes the URL query parameters with the given attribute value.
+        """
+
+        # Extracts the field metadata
+        metadata = cls._model_metadata.get(key)
+
+        url_key = metadata.get("url_key")
+        value_map = metadata.get("value_map")
+
+        # If URL syncing is not configured for this attribute, skip
+        if not url_key:
+            return
+        
+        # Apply prefix from Config
+        prefix = cls._config.get("url_prefix", "")
+        final_url_key = f"{prefix}{url_key}"
+
+        # 1. Handle Selfishness
+        if cls._config.get("url_selfish"):
+            cls._enforce_selfishness()
+
+        # ---
+        # 2. Handle None values based on Config
+        if value is None:
+
+            # If configured to ignore None values in URL, remove the param
+            if cls._config.get("ignore_none_url"):
+
+                if final_url_key in st.query_params:
+                    del st.query_params[final_url_key]
+
+                return
+            
+            else:
+                # If not ignoring None, we can represent it as an empty string
+                value = ""
+        
+        # ---
+        # 4. Convert the internal value to URL string
+        url_value = convert_to_URL(key, value, value_map)
+
+        # 5. Update the URL query parameters
+        st.query_params[final_url_key] = url_value
+
+    # ---
+    # URL Selfishness and Restoration
+    def focus(cls):
+        """
+        Programmatically claims URL focus for the class.
+    
+        This method triggers the same logic that runs when a widget bound to this
+        class is interacted with. It enforces the URL policies defined in the
+        class's `Config`.
+    
+        Specifically, it will:
+        1.  **Enforce Selfishness**: If `url_selfish=True` (default), it removes any
+            query parameters from the URL that do not belong to this class or to
+            any classes listed in `share_url_with`.
+        2.  **Restore URL**: It ensures that all URL parameters managed by this class
+            are present in the query string, restoring any that might be missing.
+    
+        This is useful for scenarios where you need to "reset" the URL to a clean
+        state reflecting only this component, such as when navigating to a new
+        section of your app programmatically.
+    
+        Example:
+            ```python
+            # Assume URL is ?other_param=abc&my_param=123
+            MyPageState.focus()
+            # URL will become ?my_param=123 (assuming url_selfish=True)
+            ```
+        """
+        
+        cls._enforce_selfishness()
+        cls._restore_url()
+
     def _restore_url(cls):
         """
         Ensures that all URL query parameters defined in the class are present in the URL,
@@ -332,87 +410,38 @@ class PageStateMeta(type):
         finally:
             # Unmark the restoring flag
             cls._is_restoring_url = False
-    
-    def _sync_url(cls, key: str, value: Any):
-        """
-        Synchronizes the URL query parameters with the given attribute value.
-        """
 
-        # Extracts the field metadata
-        metadata = cls._model_metadata.get(key)
-
-        url_key = metadata.get("url_key")
-        value_map = metadata.get("value_map")
-
-        # If URL syncing is not configured for this attribute, skip
-        if not url_key:
-            return
-        
-        # Apply prefix from Config
+    def _enforce_selfishness(cls):
+        """Removes URL parameters not belonging to this class (or shared classes) if url_selfish is True."""
         prefix = cls._config.get("url_prefix", "")
-        final_url_key = f"{prefix}{url_key}"
-
-        # 1. Handle Selfishness
-        if cls._config.get("url_selfish"):
-
-            # Collect all allowed keys for this class (the attributes with url_key defined)
-            allowed_keys = {
-                f"{prefix}{m['url_key']}"
-                for m in cls._model_metadata.values() if m.get("url_key")
-            }
-            
-            # Add allowed keys from shared classes
-            shared_classes = cls._config.get("share_url_with", [])
-            for shared_item in shared_classes:
-                shared_cls = None
-                
-                # Resolve shared classitem (could be class or string name)
-                if isinstance(shared_item, type):
-                    shared_cls = shared_item
-                elif isinstance(shared_item, str):
-                    shared_cls = _PAGE_STATE_REGISTRY.get(shared_item)
-
-                # If found, add its allowed keys
-                if shared_cls and hasattr(shared_cls, '_model_metadata'):
-
-                    # Apply shared class prefix
-                    shared_prefix = getattr(shared_cls, '_config', {}).get("url_prefix", "")
-                    
-                    # Collect shared class keys
-                    shared_keys = {
-                        f"{shared_prefix}{m['url_key']}"
-                        for m in shared_cls._model_metadata.values() if m.get("url_key")
-                    }
-
-                    # Update allowed keys
-                    allowed_keys.update(shared_keys)
-
-            # ---
-            # Keep only keys belonging to this class OR shared classes
-            for k in list(st.query_params.keys()):
-
-                if k not in allowed_keys:
-                    del st.query_params[k]
-
-        # ---
-        # 2. Handle None values based on Config
-        if value is None:
-
-            # If configured to ignore None values in URL, remove the param
-            if cls._config.get("ignore_none_url"):
-
-                if final_url_key in st.query_params:
-                    del st.query_params[final_url_key]
-
-                return
-            
-            else:
-                # If not ignoring None, we can represent it as an empty string
-                value = ""
         
-        # ---
-        # 4. Convert the internal value to URL string
-        url_value = convert_to_URL(key, value, value_map)
+        # Collect all allowed keys for this class
+        allowed_keys = {
+            f"{prefix}{m['url_key']}"
+            for m in cls._model_metadata.values() if m.get("url_key")
+        }
+        
+        # Add allowed keys from shared classes
+        shared_classes = cls._config.get("share_url_with", [])
+        for shared_item in shared_classes:
+            shared_cls = None
+            
+            # Resolve shared item (could be class or string name)
+            if isinstance(shared_item, type):
+                shared_cls = shared_item
+            elif isinstance(shared_item, str):
+                shared_cls = _PAGE_STATE_REGISTRY.get(shared_item)
 
-        # 5. Update the URL query parameters
-        st.query_params[final_url_key] = url_value
+            if shared_cls and hasattr(shared_cls, '_model_metadata'):
+                shared_prefix = getattr(shared_cls, '_config', {}).get("url_prefix", "")
+                
+                shared_keys = {
+                    f"{shared_prefix}{m['url_key']}"
+                    for m in shared_cls._model_metadata.values() if m.get("url_key")
+                }
+                allowed_keys.update(shared_keys)
+
+        # Remove extra keys
+        for k in list(st.query_params.keys()):
+            if k not in allowed_keys:
+                del st.query_params[k]
