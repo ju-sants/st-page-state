@@ -204,3 +204,37 @@ class TestConfig:
         assert st.query_params["b"] == "update_b"
         assert st.query_params["a"] == "init_a"
         assert "garbage" not in st.query_params
+
+    def test_focus_method(self):
+        """Test that the focus() method clears non-class, non-shared URL params."""
+
+        class FocusA(PageState):
+            class Config:
+                url_selfish = False
+                
+            a: str = StateVar(default="val_a", url_key="a")
+
+        class FocusB(PageState):
+            class Config:
+                url_selfish = False
+                share_url_with = [FocusA] # Even though not selfish, we share URL with A so when we focus, A's params remain.   
+
+            b: str = StateVar(default="val_b", url_key="b")
+
+
+        # Set some initial params
+        st.query_params["garbage"] = "should_be_removed"
+        FocusA.a = "initial_a"
+        FocusB.b = "initial_b"
+
+        assert st.query_params == {"garbage": "should_be_removed", "a": "initial_a", "b": "initial_b"}
+
+        # Act: Focus on class B
+        FocusB.focus()
+        
+        # Assert: Garbage should be gone, but A's param should remain due to sharing
+        assert "garbage" not in st.query_params
+        assert "a" in st.query_params
+        assert st.query_params["a"] == "initial_a"
+        assert "b" in st.query_params
+        assert st.query_params["b"] == "initial_b"

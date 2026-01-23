@@ -9,6 +9,7 @@ The `Config` class allows you to set:
 - `url_selfish`: If `True` (default), removes any URL parameters not managed by this state.
 - `ignore_none_url`: If `True` (default), `None` values are not written to the URL.
 - `restore_url_on_touch`: If `True` (default), ensures all URL params for a class are present, restoring any that are manually removed or cleared by other selfish states.
+- `focus()`: A class method to programmatically claim URL focus.
 """
 
 import streamlit as st
@@ -141,3 +142,19 @@ When you interact with this state, it will preserve the `p1_` parameters (from `
 
 st.text_input("Extra Info", **SharedState.bind("extra"))
 st.caption(f"Current value: `extra`='{SharedState.extra}'")
+
+
+st.divider()
+
+
+st.subheader("5. Programmatic URL Focus")
+st.markdown("""
+Sometimes you want to claim URL focus programmatically without waiting for a user to interact with a widget.
+The `.focus()` class method allows you to do this. It performs the same URL cleanup as if a widget had been touched.
+""")
+
+st.code("AnotherState.focus()")
+
+if st.button("Focus `AnotherState` and Clear Other Params"):
+    AnotherState.focus()
+    st.success("`AnotherState.focus()` called. URL should now only contain the `?other` parameter.")

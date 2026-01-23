@@ -174,6 +174,15 @@ class DashboardState(PageState):
 
 ## Advanced Tooling
 
+### Programmatic URL Focus
+
+Sometimes you need to claim URL focus without user interaction. The `.focus()` method programmatically triggers the `url_selfish` and `restore_url_on_touch` logic.
+
+```python
+# Clears any non-DashboardState params and ensures all its own params are in the URL
+DashboardState.focus()
+```
+
 For complex apps, visibility into your state is critical.
 
 ```python
