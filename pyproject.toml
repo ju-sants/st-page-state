@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "st-page-state"
-version = "0.1.6"
+version = "0.1.7"
 description = "Declarative, typed, URL-synced state management for Streamlit"
 readme = "README.md"
 requires-python = ">=3.8"

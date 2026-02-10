@@ -1,4 +1,5 @@
 import streamlit as st
+from typing import Any
 
 from .meta import PageStateMeta, SESSION_STATE_KEY
 
@@ -44,7 +45,7 @@ class PageState(metaclass=PageStateMeta):
                 setattr(cls, state_field, default)
 
     @classmethod
-    def bind(cls, field: str):
+    def bind(cls, field: str, value: Any = None):
         """
         Binds a Streamlit widget to a state variable.
 
@@ -53,6 +54,7 @@ class PageState(metaclass=PageStateMeta):
         to update the state when the widget changes.
 
         :param field: The name of the state variable to bind.
+        :param value: (Optional) A default value to use for the widget key if not already present in session_state.
         :return: A dictionary with 'key' and 'on_change' to be unpacked into the widget.
         """
 
@@ -64,9 +66,18 @@ class PageState(metaclass=PageStateMeta):
         # Creates a unique key for the widget
         widget_key = f"{cls.__name__}_{field}_widget"
 
-        # Sets the initial value for the widget in session state - this will be used by the widget when rendered
-        initial_value = getattr(cls, field)
-        st.session_state[widget_key] = initial_value
+        # Sets the initial value for the widget in session state
+        # Only if not already set, to avoid overwriting user interactions on re-renders
+        if widget_key not in st.session_state:
+            
+            # If a custom value was provided, use it
+            if value is not None:
+                initial_value = value
+            else:
+                # Otherwise, use the current value of the state variable
+                initial_value = getattr(cls, field)
+            
+            st.session_state[widget_key] = initial_value
 
         # Defines the callback function to update the state variable
         def callback():
