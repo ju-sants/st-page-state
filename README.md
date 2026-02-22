@@ -140,6 +140,16 @@ The `.bind()` method returns the exact dictionary (`key` and `on_change`) Stream
 st.text_input("Search", **SearchState.bind("query"))
 ```
 
+#### Custom Initial Values
+Sometimes you want a widget to start with a specific value without changing the global `StateVar` default. You can pass a `value` argument to `.bind()`:
+
+```python
+# The widget will start at 10 on the first run, even if the StateVar default is 0
+st.number_input("Counter", **MyState.bind("count", value=10))
+```
+
+*See `examples/08_bind_initial_value.py` for a full demo.*
+
 ### 5. Advanced URL Control with `Config`
 
 For multi-page or complex apps, you might need finer control over the URL query string. The inner `Config` class provides this.
