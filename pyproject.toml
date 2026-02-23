@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "st-page-state"
-version = "0.1.7"
+version = "0.2.4"
 description = "Declarative, typed, URL-synced state management for Streamlit"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -28,6 +28,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
 keywords = ["streamlit", "state-management", "url-sync", "declarative"]
+
+[project.optional-dependencies]
+redis = ["redis>=4.0"]
 
 [project.urls]
 Homepage = "https://github.com/ju-sants/st-page-state"

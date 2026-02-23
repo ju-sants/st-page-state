@@ -1,10 +1,80 @@
 import datetime
 import json
+import logging
 import base64
-from typing import Any, Type, get_origin, get_args
+from typing import Any, Dict, Type, get_origin, get_args
 from collections.abc import Hashable
 
 from ..errors import InvalidQueryParamError
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# State serialization (used by the Redis backend)
+# ---------------------------------------------------------------------------
+
+def _prepare_for_json(obj: Any) -> Any:
+    """
+    Recursively convert Python objects into JSON-safe, type-tagged form.
+    """
+
+    if isinstance(obj, dict):
+        return {k: _prepare_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, tuple):
+        return {"__type__": "tuple", "__value__": [_prepare_for_json(i) for i in obj]}
+    if isinstance(obj, (set, frozenset)):
+        return {"__type__": "set", "__value__": [_prepare_for_json(i) for i in obj]}
+    if isinstance(obj, list):
+        return [_prepare_for_json(i) for i in obj]
+    if isinstance(obj, datetime.datetime):
+        return {"__type__": "datetime", "__value__": obj.isoformat()}
+    if isinstance(obj, datetime.date):
+        return {"__type__": "date", "__value__": obj.isoformat()}
+    if isinstance(obj, datetime.time):
+        return {"__type__": "time", "__value__": obj.isoformat()}
+    if isinstance(obj, bytes):
+        return {"__type__": "bytes", "__value__": base64.b64encode(obj).decode()}
+
+    if isinstance(obj, (str, int, float, bool, type(None))):
+        return obj
+
+    logger.warning(f"skipping non-serializable value of type {type(obj).__name__} (replaced with None)")
+    return None
+
+
+def _state_json_hook(dct: dict) -> Any:
+    """``json.loads`` object hook — reconstruct typed objects from their envelope."""
+
+    t = dct.get("__type__")
+    if t is None:
+        return dct
+    
+    v = dct["__value__"]
+    
+    if t == "datetime":
+        return datetime.datetime.fromisoformat(v)
+    if t == "date":
+        return datetime.date.fromisoformat(v)
+    if t == "time":
+        return datetime.time.fromisoformat(v)
+    if t == "set":
+        return set(v)
+    if t == "tuple":
+        return tuple(v)
+    if t == "bytes":
+        return base64.b64decode(v)
+    
+    return dct
+
+
+def serialize_state(data: Dict[str, Any]) -> str:
+    """Serialize a state dict to a JSON string for external storage."""
+    return json.dumps(_prepare_for_json(data))
+
+
+def deserialize_state(raw: str) -> Dict[str, Any]:
+    """Deserialize a JSON string back into a state dict."""
+    return json.loads(raw, object_hook=_state_json_hook)
 
 SEPARATOR = "||"
 

@@ -68,6 +68,12 @@ This is powered by **Automatic Bi-Directional Sync**:
 pip install st-page-state
 ```
 
+With optional Redis support:
+
+```bash
+pip install st-page-state[redis]
+```
+
 *(Requires Python 3.8+ and Streamlit >= 1.30)*
 
 ## 📖 Core Patterns
@@ -181,6 +187,49 @@ class DashboardState(PageState):
 *   `share_url_with`: **(List[str] | List[Type[PageState]])** A list of other `PageState` class names (strings) or class objects that this state should share the URL with. Even if `url_selfish` is True, parameters belonging to the specified classes will be preserved in the URL instead of being cleared.
 
 *See `examples/07_config_class.py` for a full demo.*
+
+### 6. Redis Persistence (Optional)
+
+State lives in `st.session_state` by default — if the server restarts, it's gone. For apps that need durability, enable Redis-backed persistence with two lines:
+
+```bash
+pip install st-page-state[redis]
+```
+
+```python
+from st_page_state import PageState, StateVar, RedisBackend
+
+r_backend = RedisBackend(
+    host="localhost",
+    default_ttl=3600,
+    # Tie state to a user identity instead of Streamlit's ephemeral session ID:
+    session_id=lambda: st.session_state.get("user_email", "anonymous"),
+)
+
+class Counter(PageState):
+    count: int = StateVar(default=0, url_key="count")
+
+with r_backend.session():
+    st.number_input("Count", **Counter.bind("count"))
+```
+
+`r_backend.session()` loads all stored state from Redis on entry and saves it back on exit. The global `default_ttl` controls key expiry; override it per class via `Config.ttl`.
+
+By default, Redis keys are scoped to Streamlit's ephemeral session ID (one per browser tab). Pass `session_id` as a string or callable to tie state to a stable user identity so it persists across tabs and restarts:
+
+```python
+class EphemeralState(PageState):
+    draft: str = StateVar(default="")
+
+    class Config:
+        ttl = 120  # expires after 2 minutes
+```
+
+**Identity transition** — when using a callable `session_id` (e.g. `lambda: st.session_state.get("user_email", "anonymous")`), if the returned value changes between reruns (anonymous → logged-in user), the in-memory state is automatically cleared and re-loaded from Redis under the new identity. No stale data leaks across users.
+
+**URL priority** — fields whose `url_key` appears in the current `query_params` are *skipped* during Redis LOAD, so shared URLs like `?page=settings&tab=2` always take precedence over whatever was last saved.
+
+*See `examples/09_redis_persistence.py` for a full demo.*
 
 ## Advanced Tooling
 
